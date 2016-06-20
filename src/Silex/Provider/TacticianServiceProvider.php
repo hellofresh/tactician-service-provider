@@ -4,8 +4,10 @@ namespace Silex\Provider;
 
 use League\Tactician\CommandBus;
 use League\Tactician\Handler\CommandHandlerMiddleware;
+use League\Tactician\Handler\CommandNameExtractor\ClassNameExtractor;
 use League\Tactician\Handler\CommandNameExtractor\CommandNameExtractor;
 use League\Tactician\Handler\Locator\HandlerLocator;
+use League\Tactician\Handler\Locator\InMemoryLocator;
 use League\Tactician\Handler\MethodNameInflector\HandleClassNameInflector;
 use League\Tactician\Handler\MethodNameInflector\HandleClassNameWithoutSuffixInflector;
 use League\Tactician\Handler\MethodNameInflector\HandleInflector;
@@ -14,8 +16,6 @@ use League\Tactician\Handler\MethodNameInflector\MethodNameInflector;
 use League\Tactician\Middleware;
 use Pimple\Container;
 use Pimple\ServiceProviderInterface;
-use Silex\Component\Tactician\CommandNameExtractor\Silex as SilexCommandExtractor;
-use Silex\Component\Tactician\Locator\Silex as SilexLocator;
 
 /**
  * Class TacticianServiceProvider
@@ -24,68 +24,42 @@ use Silex\Component\Tactician\Locator\Silex as SilexLocator;
 class TacticianServiceProvider implements ServiceProviderInterface
 {
     /**
-     * @var Container
-     */
-    private $app;
-
-    /**
-     * @var array
-     */
-    private $config;
-    /**
-     * @param array $config
-     */
-    public function __construct(array $config)
-    {
-        $this->config = $config;
-    }
-    /**
      * @param Container $app
      */
     public function register(Container $app)
     {
-        $this->app = $app;
-
-        foreach ($this->config as $key => $value) {
-            $this->app[$key] = $value;
-        }
-
         // register default locator if haven't defined yet
-        if (! $app->offsetExists('tactician.locator')) {
-            $app['tactician.locator'] = function () use ($app) {
-                return new SilexLocator($app);
-            };
-        }
+        $app['tactician.locator'] = function () {
+            return new InMemoryLocator();
+        };
 
         // register default command extractor if haven't defined yet
-        if (! $app->offsetExists('tactician.command_extractor')) {
-            $app['tactician.command_extractor'] = function () {
-                return new SilexCommandExtractor();
-            };
-        }
+        $app['tactician.command_extractor'] = function () {
+            return new ClassNameExtractor();
+        };
 
         // if inflector is string then resolve it
-        if (is_string($app['tactician.inflector'])) {
-            $app['tactician.inflector'] = $this->resolveStringBaseMethodInflector($app['tactician.inflector']);
-        }
+        $app['tactician.inflector'] = function (Container $c) {
+            return $this->resolveStringBaseMethodInflector($c['tactician.config.inflector']);
+        };
 
-        $app['tactician.command_bus'] = function () use ($app) {
+        $app['tactician.command_bus'] = function (Container $c) {
             // type checking, make sure all command bus component are valid
-            if (! $app['tactician.command_extractor'] instanceof CommandNameExtractor) {
+            if (!$c['tactician.command_extractor'] instanceof CommandNameExtractor) {
                 throw new \InvalidArgumentException(sprintf(
                     'Tactician command extractor must implement %s',
                     CommandNameExtractor::class
                 ));
             }
 
-            if (! $app['tactician.locator'] instanceof HandlerLocator) {
+            if (!$c['tactician.locator'] instanceof HandlerLocator) {
                 throw new \InvalidArgumentException(sprintf(
                     'Tactician locator must implement %s',
                     HandlerLocator::class
                 ));
             }
 
-            if (! $app['tactician.inflector'] instanceof MethodNameInflector) {
+            if (!$c['tactician.inflector'] instanceof MethodNameInflector) {
                 throw new \InvalidArgumentException(sprintf(
                     'Tactician inflector must implement %s',
                     MethodNameInflector::class
@@ -93,15 +67,15 @@ class TacticianServiceProvider implements ServiceProviderInterface
             }
 
             $handler_middleware = new CommandHandlerMiddleware(
-                $app['tactician.command_extractor'],
-                $app['tactician.locator'],
-                $app['tactician.inflector']
+                $c['tactician.command_extractor'],
+                $c['tactician.locator'],
+                $c['tactician.inflector']
             );
 
             // combine middleware together
-            $middleware = $app['tactician.middleware'];
-            array_walk($middleware, function (&$value) {
-                $value = $this->resolveMiddleware($value);
+            $middleware = $c['tactician.middleware'];
+            array_walk($middleware, function (&$value) use ($c) {
+                $value = $this->resolveMiddleware($c, $value);
             });
             array_push($middleware, $handler_middleware);
 
@@ -117,29 +91,19 @@ class TacticianServiceProvider implements ServiceProviderInterface
     {
         switch ($string) {
             case 'class_name':
-                $inflector = function () {
-                    return new HandleClassNameInflector();
-                };
+                $inflector = new HandleClassNameInflector();
                 break;
             case 'class_name_without_suffix':
-                $inflector = function () {
-                    return new HandleClassNameWithoutSuffixInflector();
-                };
+                $inflector = new HandleClassNameWithoutSuffixInflector();
                 break;
             case 'handle':
-                $inflector = function () {
-                    return new HandleInflector();
-                };
+                $inflector = new HandleInflector();
                 break;
             case 'invoke':
-                $inflector = function () {
-                    return new InvokeInflector();
-                };
+                $inflector = new InvokeInflector();
                 break;
             default:
-                $inflector = function () {
-                    return new HandleClassNameInflector();
-                };
+                $inflector = new HandleClassNameInflector();
                 break;
         }
 
@@ -150,14 +114,14 @@ class TacticianServiceProvider implements ServiceProviderInterface
      * @param string|Middleware $middleware
      * @return Middleware
      */
-    public function resolveMiddleware($middleware)
+    public function resolveMiddleware(Container $pimple, $middleware)
     {
         if ($middleware instanceof Middleware) {
             return $middleware;
         }
 
-        if ($this->app->offsetExists($middleware)) {
-            $middleware = $this->app[$middleware];
+        if ($pimple->offsetExists($middleware)) {
+            $middleware = $pimple[$middleware];
             if ($middleware instanceof Middleware) {
                 return $middleware;
             }
