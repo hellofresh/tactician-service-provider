@@ -2,7 +2,7 @@
     "name": "hellofresh/tactician-service-provider",
     "description": "Silex tactician service provider",
     "require": {
-        "php":  "~5.5",
+        "php": ">=5.5.9",
         "silex/silex": "~2.0",
         "league/tactician": "~1.0"
     },
