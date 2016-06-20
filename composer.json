@@ -1,23 +1,25 @@
 {
-    "name": "jowy/tactician-service-provider",
+    "name": "italolelis/tactician-service-provider",
     "description": "Silex tactician service provider",
     "require": {
-        "silex/silex": "2.0.x-dev",
-        "pimple/pimple": "~3.0",
-        "league/tactician": "~1.0.0",
-        "php":  "~5.5"
+        "php":  "~5.5",
+        "silex/silex": "~2.0",
+        "league/tactician": "~1.0"
     },
     "license": "MIT",
     "authors": [
         {
             "name": "Prasetyo Wicaksono",
             "email": "pras@openmailbox.org"
+        },
+        {
+            "name": "Italo Lelis de Vietro",
+            "email": "italolelis@gmail.com"
         }
     ],
     "autoload": {
         "psr-4" : {
             "Silex\\" : "src/Silex/"
         }
-    },
-    "minimum-stability": "stable"
+    }
 }
