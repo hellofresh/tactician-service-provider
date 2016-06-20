@@ -1,5 +1,5 @@
 {
-    "name": "italolelis/tactician-service-provider",
+    "name": "hellofresh/tactician-service-provider",
     "description": "Silex tactician service provider",
     "require": {
         "php":  "~5.5",
